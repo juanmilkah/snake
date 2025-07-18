@@ -6,11 +6,15 @@ const windowHeight: i32 = 600;
 const windowWidth: i32 = 800;
 const windowBorderColor = rl.Color.white;
 const windowBackgroundColor = rl.Color.black;
-const borderOffset = 20;
-const minX = borderOffset;
-const minY = borderOffset;
-const maxX = windowWidth - borderOffset - snakeSegmentDimensions.width;
-const maxY = windowHeight - borderOffset - snakeSegmentDimensions.height;
+const borderXOffset = 20;
+const borderYOffset = 20;
+const gameBoxHeight = windowHeight - borderYOffset;
+const gameBoxWidth = windowWidth - borderXOffset * 2;
+const minX = borderXOffset + snakeSegmentDimensions.width;
+const minY = borderYOffset + snakeSegmentDimensions.height;
+const maxX = gameBoxWidth - snakeSegmentDimensions.width;
+const maxY = gameBoxHeight - snakeSegmentDimensions.height;
+const helpMenuColor = rl.Color.green;
 
 // fruit constants
 const fruitDimensions = .{
@@ -71,6 +75,8 @@ const Snake = struct {
 const Direction = enum { Up, Down, Right, Left };
 
 const Position = struct { x: i32, y: i32 };
+
+const GameState = enum { Paused, Pending, Running, Over };
 
 // handle gameplay key presses to control the snake
 fn updateSnakeDirection(snake: *Snake) void {
@@ -197,8 +203,8 @@ pub fn main() !void {
 
     // Game variables
     var counter: u32 = 0;
-    var gameOver: bool = false;
     var frameCounter: u32 = 0;
+    var gameState = GameState.Pending;
 
     var snakeBody = std.ArrayList(Position).init(allocator);
     defer snakeBody.deinit();
@@ -218,98 +224,14 @@ pub fn main() !void {
 
     // event loop
     while (!rl.windowShouldClose()) {
+        rl.beginDrawing();
+        defer rl.endDrawing();
+
         if (rl.isKeyPressed(rl.KeyboardKey.q) or rl.isKeyPressed(rl.KeyboardKey.escape)) {
             break;
         }
 
-        if (gameOver) {
-            rl.beginDrawing();
-            // rl.clearBackground(windowBackgroundColor);
-
-            rl.drawText(
-                "Game Over!",
-                windowWidth / 2 - @divFloor(rl.measureText("Game Over!", 30), 2),
-                windowHeight / 2 - 30,
-                30,
-                rl.Color.gold,
-            );
-            rl.drawText(
-                "Press R to Restart",
-                windowWidth / 2 - @divFloor(rl.measureText("Press R to Restart", 20), 2),
-                windowHeight / 2 + 10,
-                20,
-                rl.Color.gray,
-            );
-
-            const scoreText = try std.fmt.bufPrintZ(&scoreTextBuf, "Score: {}", .{counter});
-            rl.drawText(
-                scoreText,
-                windowWidth / 2 - @divFloor(rl.measureText("Press R to Restart", 20), 2),
-                windowHeight / 2 + 40,
-                20,
-                rl.Color.green,
-            );
-
-            if (rl.isKeyPressed(rl.KeyboardKey.r)) {
-                // reset game state
-                snake.head = initialSnakePosition;
-                snake.body.clearAndFree(); // Clear and free memory
-                snake.direction = Direction.Right;
-
-                // Randomize fruit and ensure it's not on the snake
-                fruit.position = randomizeFruitPosition(rand);
-                while (isPositionInSnake(&fruit.position, &snake)) {
-                    fruit.position = randomizeFruitPosition(rand);
-                }
-                fruit.updateRec();
-                counter = 0;
-                gameOver = false;
-            }
-            rl.endDrawing();
-            continue;
-        }
-
-        // Game play logic
-        frameCounter += 1;
-        updateSnakeDirection(&snake);
-
-        if (frameCounter >= 8) { // Update game logic every 8 frames for slower movement
-            frameCounter = 0;
-
-            // Store the old head position before moving, for tail growth
-            const oldHeadPosition = snake.head;
-
-            updateSnakePosition(&snake);
-
-            if (hasCollidedBorder(&snake) or hasCollidedSelf(&snake)) {
-                gameOver = true;
-            }
-
-            if (hasEatenFruit(&snake, &fruit)) {
-                counter += 1;
-                try snake.body.insert(0, oldHeadPosition);
-                fruit.position = randomizeFruitPosition(rand);
-                while (isPositionInSnake(&fruit.position, &snake)) {
-                    fruit.position = randomizeFruitPosition(rand);
-                }
-                fruit.updateRec();
-            }
-        }
-
-        rl.beginDrawing();
         rl.clearBackground(windowBackgroundColor);
-
-        rl.drawRectangleLines(
-            borderOffset,
-            borderOffset,
-            windowWidth - borderOffset * 2,
-            windowHeight - borderOffset * 2,
-            windowBorderColor,
-        );
-
-        // Draw score
-        const scoreText = try std.fmt.bufPrintZ(&scoreTextBuf, "Score: {}", .{counter});
-        rl.drawText(scoreText, 20, 0, 20, rl.Color.green);
 
         // Draw title
         rl.drawText(
@@ -320,22 +242,204 @@ pub fn main() !void {
             rl.Color.gold,
         );
 
-        // Draw fruit
-        rl.drawRectangleRec(fruit.rec, fruitColor);
+        // draw borders
+        rl.drawRectangleLines(
+            borderXOffset,
+            borderYOffset,
+            gameBoxWidth,
+            gameBoxHeight,
+            windowBorderColor,
+        );
 
-        // Draw snake body
-        for (snake.body.items) |segment| {
-            rl.drawRectangle(
-                segment.x,
-                segment.y,
-                snakeSegmentDimensions.width,
-                snakeSegmentDimensions.height,
-                snakeSegmentColor,
-            );
+        switch (gameState) {
+            .Paused => {
+                rl.drawText(
+                    "Press Space to continue!",
+                    windowWidth / 2 - @divFloor(rl.measureText("Press Space to continue!", 20), 2),
+                    windowHeight / 2 + 10,
+                    20,
+                    helpMenuColor,
+                );
+
+                if (rl.isKeyPressed(rl.KeyboardKey.space)) {
+                    gameState = .Running;
+                }
+
+                if (rl.isKeyPressed(rl.KeyboardKey.q)) {
+                    gameState = .Over;
+                }
+
+                // Draw score
+                const scoreText = try std.fmt.bufPrintZ(&scoreTextBuf, "Score: {}", .{counter});
+                rl.drawText(scoreText, 20, 0, 20, rl.Color.green);
+
+                // Draw fruit
+                rl.drawRectangleRec(fruit.rec, fruitColor);
+
+                // Draw snake body
+                for (snake.body.items) |segment| {
+                    rl.drawRectangle(
+                        segment.x,
+                        segment.y,
+                        snakeSegmentDimensions.width,
+                        snakeSegmentDimensions.height,
+                        snakeSegmentColor,
+                    );
+                }
+
+                // Draw snake head
+                rl.drawRectangleRec(snake.getHeadRec(), snakeHeadColor);
+            },
+            // Not yet started
+            .Pending => {
+                rl.clearBackground(windowBackgroundColor);
+                rl.drawText(
+                    "Snake 2D Game",
+                    windowWidth / 2 - @divFloor(rl.measureText(
+                        "Snake 2D Game",
+                        20,
+                    ), 2),
+                    windowHeight / 2 - 50,
+                    20,
+                    helpMenuColor,
+                );
+                rl.drawText(
+                    "Use the arrows for control",
+                    windowWidth / 2 - @divFloor(rl.measureText(
+                        "Use the arrows for control",
+                        20,
+                    ), 2),
+                    windowHeight / 2 - 20,
+                    20,
+                    helpMenuColor,
+                );
+                rl.drawText(
+                    "Press Space to start!",
+                    windowWidth / 2 - @divFloor(rl.measureText("Press Space to start!", 20), 2),
+                    windowHeight / 2 + 10,
+                    20,
+                    helpMenuColor,
+                );
+
+                if (rl.isKeyPressed(rl.KeyboardKey.space)) {
+                    gameState = .Paused;
+                }
+            },
+            .Running => {
+                if (rl.isKeyPressed(rl.KeyboardKey.space)) {
+                    gameState = .Paused;
+                }
+
+                frameCounter += 1;
+
+                if (frameCounter >= 8) { // Update game logic every 8 frames for slower movement
+                    frameCounter = 0;
+
+                    // Store the old head position before moving, for tail growth
+                    const oldHeadPosition = snake.head;
+
+                    updateSnakePosition(&snake);
+
+                    if (hasCollidedBorder(&snake) or hasCollidedSelf(&snake)) {
+                        gameState = .Over;
+                    }
+
+                    if (hasEatenFruit(&snake, &fruit)) {
+                        counter += 1;
+                        try snake.body.insert(0, oldHeadPosition);
+                        fruit.position = randomizeFruitPosition(rand);
+                        while (isPositionInSnake(&fruit.position, &snake)) {
+                            fruit.position = randomizeFruitPosition(rand);
+                        }
+                        fruit.updateRec();
+                    }
+                }
+
+                updateSnakeDirection(&snake);
+
+                // Draw score
+                const scoreText = try std.fmt.bufPrintZ(&scoreTextBuf, "Score: {}", .{counter});
+                rl.drawText(scoreText, 20, 0, 20, rl.Color.green);
+
+                // Draw fruit
+                rl.drawRectangleRec(fruit.rec, fruitColor);
+
+                // Draw snake body
+                for (snake.body.items) |segment| {
+                    rl.drawRectangle(
+                        segment.x,
+                        segment.y,
+                        snakeSegmentDimensions.width,
+                        snakeSegmentDimensions.height,
+                        snakeSegmentColor,
+                    );
+                }
+
+                // Draw snake head
+                rl.drawRectangleRec(snake.getHeadRec(), snakeHeadColor);
+
+                // help
+                rl.drawText(
+                    "Press Space to pause game or q to quit!",
+                    borderXOffset,
+                    maxY + borderYOffset * 2,
+                    20,
+                    rl.Color.green,
+                );
+            },
+            .Over => {
+                // Draw score
+                const scoreText = try std.fmt.bufPrintZ(&scoreTextBuf, "Score: {}", .{counter});
+                rl.drawText(scoreText, 20, 0, 20, rl.Color.green);
+
+                rl.drawText(
+                    "Game Over!",
+                    windowWidth / 2 - @divFloor(rl.measureText("Game Over!", 30), 2),
+                    windowHeight / 2 - 30,
+                    30,
+                    rl.Color.gold,
+                );
+                rl.drawText(
+                    "Press R to Restart",
+                    windowWidth / 2 - @divFloor(rl.measureText("Press R to Restart", 20), 2),
+                    windowHeight / 2 + 10,
+                    20,
+                    rl.Color.gray,
+                );
+
+                // Draw fruit
+                rl.drawRectangleRec(fruit.rec, fruitColor);
+
+                // Draw snake body
+                for (snake.body.items) |segment| {
+                    rl.drawRectangle(
+                        segment.x,
+                        segment.y,
+                        snakeSegmentDimensions.width,
+                        snakeSegmentDimensions.height,
+                        snakeSegmentColor,
+                    );
+                }
+
+                // Draw snake head
+                rl.drawRectangleRec(snake.getHeadRec(), snakeHeadColor);
+
+                if (rl.isKeyPressed(rl.KeyboardKey.r)) {
+                    // reset game state
+                    snake.head = initialSnakePosition;
+                    snake.body.clearAndFree(); // Clear and free memory
+                    snake.direction = Direction.Right;
+
+                    // Randomize fruit and ensure it's not on the snake
+                    fruit.position = randomizeFruitPosition(rand);
+                    while (isPositionInSnake(&fruit.position, &snake)) {
+                        fruit.position = randomizeFruitPosition(rand);
+                    }
+                    fruit.updateRec();
+                    counter = 0;
+                    gameState = .Running;
+                }
+            },
         }
-
-        // Draw snake head
-        rl.drawRectangleRec(snake.getHeadRec(), snakeHeadColor);
-        rl.endDrawing();
     }
 }
