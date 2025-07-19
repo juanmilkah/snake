@@ -249,7 +249,10 @@ pub fn main() !void {
         // Draw title
         rl.drawText(
             "Snake",
-            windowWidth / 2 - @divFloor(rl.measureText("Press R to Restart", 20), 2),
+            windowWidth / 2 - @divFloor(rl.measureText(
+                "Snake",
+                20,
+            ), 2),
             0,
             20,
             rl.Color.gold,
