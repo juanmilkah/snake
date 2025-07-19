@@ -2,8 +2,8 @@ const std = @import("std");
 const rl = @import("raylib");
 
 // window constants
-const windowHeight: i32 = 600;
-const windowWidth: i32 = 800;
+const windowHeight: i32 = 700;
+const windowWidth: i32 = 1000;
 const windowBorderColor = rl.Color.white;
 const windowBackgroundColor = rl.Color.black;
 const borderXOffset = 20;
@@ -445,6 +445,19 @@ pub fn main() !void {
                     snake.head = initialSnakePosition;
                     snake.body.clearAndFree(); // Clear and free memory
                     snake.direction = Direction.Right;
+
+                    // assuming intial direction is right
+                    for (1..intialSnakeLength) |i| {
+                        const segmentPos = Position{
+                            .x = snake.head.x - snakeSegmentDimensions.width * std.math.cast(
+                                i32,
+                                i,
+                            ).?,
+                            .y = snake.head.y,
+                        };
+
+                        try snake.body.append(segmentPos);
+                    }
 
                     // Randomize fruit and ensure it's not on the snake
                     fruit.position = randomizeFruitPosition(rand);
