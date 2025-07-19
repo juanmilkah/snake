@@ -24,6 +24,8 @@ const fruitDimensions = .{
 const fruitColor = rl.Color.orange;
 
 // snake
+const initiaSnakeDirection = Direction.Right;
+const intialSnakeLength = 3;
 const initialSnakePosition: Position = .{ .x = 200, .y = 200 };
 const snakeSegmentDimensions = .{
     .width = 20,
@@ -214,6 +216,17 @@ pub fn main() !void {
         .direction = Direction.Right,
         .body = snakeBody,
     };
+
+    // assuming intial direction is right
+    for (1..intialSnakeLength) |i| {
+        const segmentPos = Position{
+            .x = snake.head.x - snakeSegmentDimensions.width * std.math.cast(i32, i).?,
+            .y = snake.head.y,
+        };
+
+        try snake.body.append(segmentPos);
+    }
+
     var initialFruitPosition = randomizeFruitPosition(rand);
     while (isPositionInSnake(&initialFruitPosition, &snake)) {
         initialFruitPosition = randomizeFruitPosition(rand);
@@ -255,7 +268,10 @@ pub fn main() !void {
             .Paused => {
                 rl.drawText(
                     "Press Space to continue!",
-                    windowWidth / 2 - @divFloor(rl.measureText("Press Space to continue!", 20), 2),
+                    windowWidth / 2 - @divFloor(rl.measureText(
+                        "Press Space to continue!",
+                        20,
+                    ), 2),
                     windowHeight / 2 + 10,
                     20,
                     helpMenuColor,
